@@ -105,7 +105,7 @@ violins
 ggsave(filename = "violins.png",
        plot = violins,
        path = here("output"),
-       width = 6, height = 6, dpi = 300)
+       width = 6, height = 8, dpi = 300)
 ```
 
 
@@ -418,7 +418,7 @@ fifth_discipline_plot <- ggplot(plot_data, aes(x = gender, y = Value, fill = Met
 ggsave(filename = "fifth_discipline_plot.png",
        plot = fifth_discipline_plot,
        path = here("output"),
-       width = 6, height = 6, dpi = 300)
+       width = 8, height = 6, dpi = 300)
 ```
 
 ```{r}
@@ -494,5 +494,5 @@ DNS_plot <- ggplot(plot_data, aes(x = year, y = Value, fill = Gender, color = Ge
 ggsave(filename = "DNS_plot.png",
        plot = DNS_plot,
        path = here("output"),
-       width = 6, height = 6, dpi = 300)
+       width = 8, height = 6, dpi = 300)
 ```
