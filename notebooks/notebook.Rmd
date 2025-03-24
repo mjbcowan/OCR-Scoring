@@ -1,0 +1,498 @@
+---
+title: "BUCS_data"
+author: "mjbc"
+---
+
+
+```{r libraries, echo = FALSE}
+library(readxl)
+library(here)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(gt)
+library(webshot2)
+library(grid)
+library(gridExtra)
+library(tidyr)
+library(ggthemes)
+library(gt)
+```
+
+```{r}
+womens_data <- read_xlsx(here("data", "BUCS_data.xlsx"), sheet="BUCS_women") # Load data
+mens_data <- read_xlsx(here("data", "BUCS_data.xlsx"), sheet="BUCS_men") # Load data
+```
+
+```{r}
+womens_data <- womens_data %>% mutate(
+  athelete_ID = paste0("W", as.numeric(factor(name)))
+) # add unique ID for each athlete, women prefixed with W
+
+womens_data <- womens_data %>% mutate(gender = "Womens")
+
+mens_data <- mens_data %>% mutate(
+  athelete_ID = paste0("M", as.numeric(factor(name)))
+) # add unique ID for each athlete, men prefixed with M
+
+mens_data <- mens_data %>% mutate(gender = "Mens")
+
+mw_data <- rbind(mens_data, womens_data) # combine datasets
+
+mw_data <- mw_data %>%
+  mutate(DNS_fence = if_else(fence == "DNS", "DNS", "NA"))
+mw_data <- mw_data %>%
+  mutate(DNS_swim = if_else(swim == "DNS", "DNS", "NA"))
+mw_data <- mw_data %>%
+  mutate(DNS_fifth = if_else(fifth_discipline == "DNS", "DNS", "NA"))
+mw_data <- mw_data %>%
+  mutate(DNS_LR = if_else(laser_run == "DNS", "DNS", "NA"))
+
+mw_data <- mw_data %>%
+  mutate(across(c(fence, swim, fifth_discipline, laser_run), ~ if_else(. == "DNS", 0, as.numeric(.))))
+```
+```{r}
+head(mw_data)
+```
+
+
+```{r}
+# Calculate sample sizes
+n_counts <- mw_data %>%
+  group_by(year, gender) %>%
+  summarise(n = n(), .groups = "drop")
+
+# Violin Plot with n Numbers at Bottom
+violins <- ggplot(mw_data, aes(x = factor(year), y = pentathlon, fill = gender)) +
+  
+  # Violin plot
+  geom_violin(trim = FALSE, alpha = 0.7) +
+  
+  # Boxplot overlay
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  
+  # Sample size labels at bottom
+  geom_text(
+    data = n_counts,
+    aes(x = factor(year), y = min(mw_data$pentathlon, na.rm = TRUE) - 5, 
+        label = paste0("n=", n)),
+    position = position_dodge(width = 0.9),
+    size = 4,
+    vjust = 1.5  # Ensures text stays below the axis
+  ) +
+  
+  # Titles and labels
+  labs(
+    title = "Pentathlon Scores by Year and Gender",
+    subtitle = "2021 excluded due to COVID-19",
+    x = "Year",
+    y = "Score"
+  ) +
+  
+  # Theme and styling
+  theme_minimal() +
+  scale_fill_manual(values = c("Mens" = "blue", "Womens" = "red")) +
+  theme(
+    legend.position = "top",
+    axis.text.x = element_text(margin = margin(t = 10))  # Adds space for n labels
+  )
+
+violins
+```
+```{r}
+# Save plot
+ggsave(filename = "violins.png",
+       plot = violins,
+       path = here("output"),
+       width = 6, height = 6, dpi = 300)
+```
+
+
+```{r}
+# Function to round data to 1 decimal place
+round_data <- function(df) {
+  df %>%
+    mutate(across(where(is.numeric), ~ round(., 1)))
+}
+
+# Filtered datasets for each category
+mens_median <- mw_data %>%
+  filter(gender == "Mens") %>%
+  group_by(year) %>%
+  summarise(
+    n = n(),
+    fence = median(fence, na.rm = TRUE),
+    swim = median(swim, na.rm = TRUE),
+    fifth_discipline = median(fifth_discipline, na.rm = TRUE),
+    laser_run = median(laser_run, na.rm = TRUE),
+    tetrathlon = median(tetrathlon, na.rm = TRUE),
+    pentathlon = median(pentathlon, na.rm = TRUE)
+  ) %>% round_data()
+
+mens_mean <- mw_data %>%
+  filter(gender == "Mens") %>%
+  group_by(year) %>%
+  summarise(
+    n = n(),
+    fence = mean(fence, na.rm = TRUE),
+    swim = mean(swim, na.rm = TRUE),
+    fifth_discipline = mean(fifth_discipline, na.rm = TRUE),
+    laser_run = mean(laser_run, na.rm = TRUE),
+    tetrathlon = mean(tetrathlon, na.rm = TRUE),
+    pentathlon = mean(pentathlon, na.rm = TRUE)
+  ) %>% round_data()
+
+womens_median <- mw_data %>%
+  filter(gender == "Womens") %>%
+  group_by(year) %>%
+  summarise(
+    n = n(),
+    fence = median(fence, na.rm = TRUE),
+    swim = median(swim, na.rm = TRUE),
+    fifth_discipline = median(fifth_discipline, na.rm = TRUE),
+    laser_run = median(laser_run, na.rm = TRUE),
+    tetrathlon = median(tetrathlon, na.rm = TRUE),
+    pentathlon = median(pentathlon, na.rm = TRUE)
+  ) %>% round_data()
+
+womens_mean <- mw_data %>%
+  filter(gender == "Womens") %>%
+  group_by(year) %>%
+  summarise(
+    n = n(),
+    fence = mean(fence, na.rm = TRUE),
+    swim = mean(swim, na.rm = TRUE),
+    fifth_discipline = mean(fifth_discipline, na.rm = TRUE),
+    laser_run = mean(laser_run, na.rm = TRUE),
+    tetrathlon = mean(tetrathlon, na.rm = TRUE),
+    pentathlon = mean(pentathlon, na.rm = TRUE)
+  ) %>% round_data()
+
+
+```
+
+```{r}
+# Calculate mean and median by year and gender
+summary_stats <- mw_data %>%
+  group_by(year, gender) %>%
+  summarize(
+    mean_score = mean(pentathlon),
+    median_score = median(pentathlon),
+    .groups = "drop"
+  )
+
+# Reshape for plotting
+plot_data <- summary_stats %>%
+  pivot_longer(
+    cols = c(mean_score, median_score),
+    names_to = "statistic",
+    values_to = "value"
+  ) %>%
+  mutate(
+    statistic = factor(statistic, 
+                      levels = c("mean_score", "median_score"),
+                      labels = c("Mean", "Median"))
+  )
+
+# Create the plot
+line_plot <- ggplot(plot_data, aes(x = year, y = value, color = gender, linetype = statistic)) +
+  geom_line(size = 1) +
+  geom_point(size = 2, alpha = 0.7) +
+  scale_color_manual(values = c("Mens" = "#3366CC", "Womens" = "#CC6677")) +
+  scale_linetype_manual(values = c("Mean" = "solid", "Median" = "dashed")) +
+  # Vertical Line at x = 2024
+  geom_vline(xintercept = 2024, color = "grey", linetype = "dashed", linewidth = 1) +
+  # Label for the Vertical Line
+  annotate("text", x = 2024.2, y = max(plot_data$Value), 
+           label = "5x600m", angle = 90, hjust = -0.1, size = 5) +
+    # Vertical Line at x = 2024
+  geom_vline(xintercept = 2025, color = "black", linetype = "dashed", linewidth = 1) +
+  # Label for the Vertical Line
+  annotate("text", x = 2025.2, y = max(plot_data$Value), 
+           label = "OCR", angle = 90, hjust = -0.1, size = 5) +
+  labs(
+    title = "Pentathlon Score Trends Over Time",
+    subtitle = "Comparison of Mean and Median Scores by Gender",
+    x = "Year",
+    y = "Score",
+    color = "Gender",
+    linetype = "Statistic"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    text = element_text(size = 12),
+    plot.title = element_text(face = "bold", size = 14),
+    axis.title = element_text(face = "bold")
+  ) +
+  scale_x_continuous(breaks = seq(2000, 2024, 4)) +
+  scale_y_continuous(labels = scales::comma)
+
+line_plot
+```
+```{r}
+# Save plot
+ggsave(filename = "line_plot.png",
+       plot = line_plot,
+       path = here("output"),
+       width = 6, height = 6, dpi = 300)
+```
+
+
+```{r}
+# Create a results list to store outputs
+results <- list()
+
+# 1. Mean and Median for Each Year
+results$year_summary <- mw_data %>%
+  group_by(year) %>%
+  summarise(
+    mean_fifth = mean(fifth_discipline, na.rm = TRUE),
+    median_fifth = median(fifth_discipline, na.rm = TRUE)
+  )
+
+# 2. Mean and Median for Each Gender by Year
+results$year_gender_summary <- mw_data %>%
+  group_by(year, gender) %>%
+  summarise(
+    mean_fifth = mean(fifth_discipline, na.rm = TRUE),
+    median_fifth = median(fifth_discipline, na.rm = TRUE)
+  ) %>%
+  pivot_wider(
+    names_from = gender,
+    values_from = c(mean_fifth, median_fifth),
+    names_glue = "{gender}_{.value}"
+  ) %>%
+  rename(
+    `Mens mean fifth` = Mens_mean_fifth,
+    `Womens mean fifth` = Womens_mean_fifth,
+    `Mens median` = Mens_median_fifth,
+    `Womens median` = Womens_median_fifth
+  )
+
+# 3. Mean and Median for 2020-2024 (Total & Gender Split)
+results$overall_2020_2024 <- mw_data %>%
+  filter(year %in% 2020:2024) %>%
+  group_by(gender) %>%
+  summarise(
+    mean_fifth = mean(fifth_discipline, na.rm = TRUE),
+    median_fifth = median(fifth_discipline, na.rm = TRUE)
+  ) %>%
+  bind_rows(
+    mw_data %>%
+      filter(year %in% 2020:2024) %>%
+      summarise(
+        gender = "Total",
+        mean_fifth = mean(fifth_discipline, na.rm = TRUE),
+        median_fifth = median(fifth_discipline, na.rm = TRUE)
+      )
+  )
+
+# 4. Mean and Median for 2025 (Total & Gender Split)
+results$overall_2025 <- mw_data %>%
+  filter(year == 2025) %>%
+  group_by(gender) %>%
+  summarise(
+    mean_fifth = mean(fifth_discipline, na.rm = TRUE),
+    median_fifth = median(fifth_discipline, na.rm = TRUE)
+  ) %>%
+  bind_rows(
+    mw_data %>%
+      filter(year == 2025) %>%
+      summarise(
+        gender = "Total",
+        mean_fifth = mean(fifth_discipline, na.rm = TRUE),
+        median_fifth = median(fifth_discipline, na.rm = TRUE)
+      )
+  )
+
+# Combine 2020-2024 and 2025 data for clear comparison
+results$overall_comparison <- results$overall_2020_2024 %>%
+  rename(
+    `2020-2024 Mean` = mean_fifth,
+    `2020-2024 Median` = median_fifth
+  ) %>%
+  left_join(
+    results$overall_2025 %>%
+      rename(
+        `2025 Mean` = mean_fifth,
+        `2025 Median` = median_fifth
+      ),
+    by = "gender"
+  ) %>%
+  mutate(
+    `Mean Difference` = `2025 Mean` - `2020-2024 Mean`,
+    `Median Difference` = `2025 Median` - `2020-2024 Median`
+  )
+
+# 5. Participant Counts & DNS Counts
+results$participant_counts <- mw_data %>%
+  group_by(year, gender) %>%
+  summarise(
+    participant_count = n(),
+    DNS_count = sum(DNS_fifth == "DNS")
+  ) %>%
+  pivot_wider(
+    names_from = gender,
+    values_from = c(participant_count, DNS_count),
+    names_glue = "{gender}_{.value}"
+  ) %>%
+  rename(
+    `Mens participant count` = Mens_participant_count,
+    `Mens DNS count` = Mens_DNS_count,
+    `Womens participant count` = Womens_participant_count,
+    `Womens DNS count` = Womens_DNS_count
+  ) %>%
+  mutate(
+    `Mens DNS %` = `Mens DNS count` / `Mens participant count` * 100,
+    `Womens DNS %` = `Womens DNS count` / `Womens participant count` * 100
+  )
+
+# 6. Average Scoring Score (Non-Zero Scores Only)
+results$average_scoring_score <- mw_data %>%
+  filter(!is.na(fifth_discipline) & fifth_discipline > 0) %>%
+  group_by(year) %>%
+  summarise(avg_scoring_score = mean(fifth_discipline))
+```
+
+```{r}
+plot_data <- results$overall_comparison %>%
+  pivot_longer(
+    cols = c(`Mean Difference`, `Median Difference`),
+    names_to = "Metric",
+    values_to = "Value"
+  )
+
+# Determine Y-axis limits (extend by 100 units in both directions)
+y_max <- max(plot_data$Value) + 100
+y_min <- min(plot_data$Value) - 100
+
+# Plotting
+fifth_discipline_plot <- ggplot(plot_data, aes(x = gender, y = Value, fill = Metric)) +
+  
+  # Bar plot
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  
+  # Zero line for clear separation of positive/negative values
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
+  
+  # Labels for bars
+  geom_text(aes(label = round(Value, 1)), 
+            position = position_dodge(width = 0.8), 
+            vjust = ifelse(plot_data$Value < 0, 1.5, -0.5)) +
+  
+  # Extend Y-axis limits
+  ylim(y_min, y_max) +
+  
+  # Titles and labels
+  labs(
+    title = "Change in Fifth Discipline Score: 2020-2024 vs 2025",
+    subtitle = "2020-2024 (2021 excluded) Equestrian; 2025 OCR",
+    x = "Gender",
+    y = "Score Difference",
+    fill = "Metric"
+  ) +
+  
+  # FT/Economist-inspired theme
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12, margin = margin(b = 15)),
+    legend.position = "top",
+    axis.title.y = element_text(margin = margin(r = 10)),
+    panel.grid.major = element_line(color = "#d9d9d9"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "#f7f7f7"),
+    plot.background = element_rect(fill = "#f7f7f7")
+  ) +
+  
+  # Custom color palette inspired by FT
+  scale_fill_manual(values = c("Mean Difference" = "#1f78b4", 
+                               "Median Difference" = "#e31a1c"))
+
+```
+```{r}
+# Save plot
+ggsave(filename = "fifth_discipline_plot.png",
+       plot = fifth_discipline_plot,
+       path = here("output"),
+       width = 6, height = 6, dpi = 300)
+```
+
+```{r}
+# Ensure data is in long format for plotting
+plot_data <- results$participant_counts %>%
+  pivot_longer(
+    cols = c(`Mens participant count`, `Womens participant count`, 
+             `Mens DNS %`, `Womens DNS %`),
+    names_to = "Metric",
+    values_to = "Value"
+  ) %>%
+  mutate(
+    Metric_Type = case_when(
+      grepl("participant", Metric) ~ "Participant Count",
+      grepl("DNS %", Metric) ~ "DNS Percentage"
+    ),
+    Gender = case_when(
+      grepl("Mens", Metric) ~ "Men",
+      grepl("Womens", Metric) ~ "Women"
+    )
+  )
+
+# Plotting
+DNS_plot <- ggplot(plot_data, aes(x = year, y = Value, fill = Gender, color = Gender)) +
+  
+  # Bar plot for participant counts
+  geom_col(
+    data = plot_data %>% filter(Metric_Type == "Participant Count"),
+    position = position_dodge(width = 0.8),
+    width = 0.7
+  ) +
+  
+  # Line plot for DNS percentage
+  geom_line(
+    data = plot_data %>% filter(Metric_Type == "DNS Percentage"),
+    size = 1.2
+  ) +
+  geom_point(
+    data = plot_data %>% filter(Metric_Type == "DNS Percentage"),
+    size = 2
+  ) +
+  
+  # Titles and labels
+  labs(
+    title = "Pentathlon Participation and DNS Rates (2020-2025)",
+    subtitle = "Participant counts (bars) and DNS rates (lines) by gender",
+    x = "Year",
+    y = "Count / Percentage",
+    fill = "Gender",
+    color = "DNS %"
+  ) +
+  
+  #  theme
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12, margin = margin(b = 15)),
+    legend.position = "top",
+    axis.title.y = element_text(margin = margin(r = 10)),
+    panel.grid.major = element_line(color = "#d9d9d9"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "#f7f7f7"),
+    plot.background = element_rect(fill = "#f7f7f7")
+  ) +
+  
+  # Custom color palette
+  scale_fill_manual(values = c("Men" = "#1f78b4", "Women" = "#e31a1c")) +
+  scale_color_manual(values = c("Men" = "#1f78b4", "Women" = "#e31a1c"))
+```
+
+```{r}
+# Save plot
+ggsave(filename = "DNS_plot.png",
+       plot = DNS_plot,
+       path = here("output"),
+       width = 6, height = 6, dpi = 300)
+```
